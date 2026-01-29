@@ -183,6 +183,31 @@ def parse_args() -> argparse.Namespace:
         help="Включить диаризацию спикеров (pyannote). Требует HF_TOKEN.",
     )
     parser.add_argument(
+        "--diarize-smooth",
+        dest="diarize_smooth",
+        action="store_true",
+        help="Сглаживать частые переключения спикеров (по умолчанию).",
+    )
+    parser.add_argument(
+        "--diarize-no-smooth",
+        dest="diarize_smooth",
+        action="store_false",
+        help="Не сглаживать переключения спикеров.",
+    )
+    parser.set_defaults(diarize_smooth=True)
+    parser.add_argument(
+        "--diarize-min-words",
+        type=int,
+        default=3,
+        help="Минимум слов для сохранения короткой реплики при сглаживании.",
+    )
+    parser.add_argument(
+        "--diarize-min-duration",
+        type=float,
+        default=0.5,
+        help="Минимальная длительность (сек) для сохранения короткой реплики при сглаживании.",
+    )
+    parser.add_argument(
         "--diarize-temp",
         dest="diarize_temp",
         action="store_true",
@@ -546,7 +571,7 @@ def apply_diarization(audio_path: Path, segments, args: argparse.Namespace):
         return
 
     if any(getattr(seg, "words", None) for seg in segments):
-        return build_segments_from_words(segments, speaker_spans)
+        return build_segments_from_words(segments, speaker_spans, args)
 
     for seg in segments:
         seg_start = seg.start
@@ -578,7 +603,7 @@ def speaker_for_time(t: float, spans) -> str | None:
     return best_speaker
 
 
-def build_segments_from_words(segments, speaker_spans):
+def build_segments_from_words(segments, speaker_spans, args):
     out = []
     current = None
     for seg in segments:
@@ -606,7 +631,13 @@ def build_segments_from_words(segments, speaker_spans):
 
     if current is not None:
         out.append(current)
-    return smooth_speaker_segments(out)
+    if args.diarize_smooth:
+        return smooth_speaker_segments(
+            out,
+            min_words=args.diarize_min_words,
+            min_duration=args.diarize_min_duration,
+        )
+    return out
 
 
 def smooth_speaker_segments(segments, min_words=3, min_duration=0.7):

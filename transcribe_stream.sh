@@ -12,6 +12,9 @@ options:
   --model NAME           (default: medium)
   --language CODE        (default: auto)
   --diarize / --no-diarize
+  --diarize-no-smooth
+  --diarize-min-words N
+  --diarize-min-duration SEC
   --print-segments / --no-print-segments
   --chunk-sec N          (default: 20)
   --overlap-sec N        (default: 2)
@@ -52,6 +55,9 @@ COMPUTE_TYPE="int8"
 BEAM_SIZE="5"
 DIARIZE=0
 DIARIZE_TEMP=0
+DIARIZE_SMOOTH=1
+DIARIZE_MIN_WORDS=""
+DIARIZE_MIN_DURATION=""
 ASR_LANGUAGE=""
 PRINT_SEGMENTS=1
 CHUNK_SEC=20
@@ -86,6 +92,9 @@ while [[ $# -gt 0 ]]; do
     --no-diarize) DIARIZE=0; shift;;
     --diarize-temp) DIARIZE_TEMP=1; shift;;
     --diarize-no-temp) DIARIZE_TEMP=0; shift;;
+    --diarize-no-smooth) DIARIZE_SMOOTH=0; shift;;
+    --diarize-min-words) DIARIZE_MIN_WORDS="$2"; shift 2;;
+    --diarize-min-duration) DIARIZE_MIN_DURATION="$2"; shift 2;;
     --print-segments) PRINT_SEGMENTS=1; shift;;
     --no-print-segments) PRINT_SEGMENTS=0; shift;;
     --chunk-sec) CHUNK_SEC="$2"; shift 2;;
@@ -226,6 +235,15 @@ while true; do
       cmd+=(--diarize)
       if [[ "$DIARIZE_TEMP" == "1" ]]; then
         cmd+=(--diarize-temp)
+      fi
+      if [[ "$DIARIZE_SMOOTH" == "0" ]]; then
+        cmd+=(--diarize-no-smooth)
+      fi
+      if [[ -n "$DIARIZE_MIN_WORDS" ]]; then
+        cmd+=(--diarize-min-words "$DIARIZE_MIN_WORDS")
+      fi
+      if [[ -n "$DIARIZE_MIN_DURATION" ]]; then
+        cmd+=(--diarize-min-duration "$DIARIZE_MIN_DURATION")
       fi
     fi
 
