@@ -15,12 +15,13 @@ options:
   --diarize-no-smooth
   --diarize-min-words N
   --diarize-min-duration SEC
-  --print-segments / --no-print-segments
-  --vad-filter / --no-vad-filter
   --media-dir PATH        (default: /home/sasha/projects/mp3-transcribe/Media)
   --target-dir PATH       (default: MEDIA_DIR)
   --output-dir PATH       (default: TARGET_DIR)
   --recursive             (scan subfolders)
+  --extensions LIST       (comma list, default: mp3,ogg,wav,flac,m4a,opus,webm,mp4,aac)
+  --merged-file PATH      (default: Media/merged_YYYYmmdd_HHMMSS.txt)
+  --no-merged             (disable merged output)
   --venv PATH             (default: /home/sasha/projects/mp3-transcribe/.venv)
   -h, --help              show this help
 USAGE
@@ -39,10 +40,12 @@ DIARIZE_TEMP=0
 DIARIZE_SMOOTH=1
 DIARIZE_MIN_WORDS=""
 DIARIZE_MIN_DURATION=""
-ASR_LANGUAGE=""
 TARGET_DIR=""
 OUTPUT_DIR=""
 RECURSIVE=0
+EXTENSIONS="mp3,ogg,wav,flac,m4a,opus,webm,mp4,aac"
+MERGED_FILE=""
+MERGED_ENABLED=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -58,14 +61,13 @@ while [[ $# -gt 0 ]]; do
     --diarize-no-smooth) DIARIZE_SMOOTH=0; shift;;
     --diarize-min-words) DIARIZE_MIN_WORDS="$2"; shift 2;;
     --diarize-min-duration) DIARIZE_MIN_DURATION="$2"; shift 2;;
-    --print-segments) PRINT_SEGMENTS=1; shift;;
-    --no-print-segments) PRINT_SEGMENTS=0; shift;;
-    --vad-filter) VAD_FILTER=1; shift;;
-    --no-vad-filter) VAD_FILTER=0; shift;;
     --media-dir) MEDIA_DIR="$2"; shift 2;;
     --target-dir) TARGET_DIR="$2"; shift 2;;
     --output-dir) OUTPUT_DIR="$2"; shift 2;;
     --recursive) RECURSIVE=1; shift;;
+    --extensions) EXTENSIONS="$2"; shift 2;;
+    --merged-file) MERGED_FILE="$2"; shift 2;;
+    --no-merged) MERGED_ENABLED=0; shift;;
     --venv) VENV="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     --) shift; break;;
@@ -88,17 +90,38 @@ if [[ -z "$OUTPUT_DIR" ]]; then
   OUTPUT_DIR="$TARGET_DIR"
 fi
 
-shopt -s nullglob
+if [[ "$MERGED_ENABLED" == "1" && -z "$MERGED_FILE" ]]; then
+  ts="$(date +%Y%m%d_%H%M%S)"
+  MERGED_FILE="$MEDIA_DIR/merged_${ts}.txt"
+fi
+
+if [[ "$MERGED_ENABLED" == "1" ]]; then
+  : > "$MERGED_FILE"
+fi
+
+IFS=',' read -r -a exts <<<"$EXTENSIONS"
+
+files=()
 if [[ "$RECURSIVE" == "1" ]]; then
-  mapfile -t files < <(find "$TARGET_DIR" -type f -name '*.mp3' | sort)
+  for ext in "${exts[@]}"; do
+    while IFS= read -r -d '' f; do
+      files+=("$f")
+    done < <(find "$TARGET_DIR" -type f -iname "*.${ext}" -print0)
+  done
 else
-  files=("$TARGET_DIR"/*.mp3)
+  shopt -s nullglob
+  for ext in "${exts[@]}"; do
+    files+=("$TARGET_DIR"/*."${ext}")
+    files+=("$TARGET_DIR"/*."${ext^^}")
+  done
 fi
 
 if [[ ${#files[@]} -eq 0 ]]; then
-  echo "[info] mp3 files not found in $TARGET_DIR"
+  echo "[info] audio files not found in $TARGET_DIR"
   exit 0
 fi
+
+mapfile -t files < <(printf '%s\n' "${files[@]}" | sort)
 
 for f in "${files[@]}"; do
   base="${f%.*}"
@@ -110,7 +133,7 @@ for f in "${files[@]}"; do
   echo "[file] $f"
   cmd=("$VENV/bin/python" "/home/sasha/projects/mp3-transcribe/transcribe.py" "$f"
        --model "$MODEL" --format "$FORMAT" --compute-type "$COMPUTE_TYPE" --beam-size "$BEAM_SIZE" --output-dir "$OUTPUT_DIR")
-  if [[ -n "$ASR_LANGUAGE" ]]; then
+  if [[ -n "${ASR_LANGUAGE:-}" ]]; then
     cmd+=(--language "$ASR_LANGUAGE")
   fi
   if [[ "$PRINT_SEGMENTS" == "1" ]]; then
@@ -136,5 +159,13 @@ for f in "${files[@]}"; do
   fi
 
   "${cmd[@]}"
+
+  if [[ "$MERGED_ENABLED" == "1" && "$FORMAT" == "txt" ]]; then
+    out_path="$OUTPUT_DIR/$(basename "${base}").txt"
+    if [[ -f "$out_path" ]]; then
+      cat "$out_path" >> "$MERGED_FILE"
+      printf "\n" >> "$MERGED_FILE"
+    fi
+  fi
   echo
  done

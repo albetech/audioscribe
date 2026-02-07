@@ -49,13 +49,28 @@ Notes:
 - TXT is written **live** while transcribing; disable with `--no-write-live` (diarization forces non‑live output).
 
 ## Batch processing (Media by default)
-Transcribes all MP3 files that don’t yet have .txt/.srt/.json outputs.
+Transcribes supported audio files that don’t yet have .txt/.srt/.json outputs.
 ```bash
 ./transcribe_all.sh
 ```
 Target another folder:
 ```bash
 ./transcribe_all.sh --target-dir /path/to/folder
+```
+
+Limit extensions:
+```bash
+./transcribe_all.sh --extensions mp3,ogg,wav
+```
+
+Create a merged transcript for this run (default on):
+```bash
+./transcribe_all.sh --merged-file /path/to/merged.txt
+```
+
+Disable merged output:
+```bash
+./transcribe_all.sh --no-merged
 ```
 
 ## Quick single‑file wrapper
